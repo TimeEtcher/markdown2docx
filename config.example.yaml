@@ -1,0 +1,56 @@
+# md2word 样式配置示例
+# 所有字段均可省略，省略的项使用内置默认值。
+# 用法: md2word input.md -c config.yaml -o out.docx
+
+page:
+  size: A4              # A4 / A5 / Letter / custom
+  # size 为 custom 时生效:
+  # width_cm: 21.0
+  # height_cm: 29.7
+  margin_top_cm: 2.54   # 上边距（厘米）
+  margin_bottom_cm: 2.54
+  margin_left_cm: 3.17
+  margin_right_cm: 3.17
+
+body:                   # 正文样式
+  font_en: "Times New Roman"   # 英文/数字字体
+  font_zh: "宋体"              # 中文字体
+  font_size: 12                # 字号（磅）
+  line_spacing: 1.5            # 行距（倍数）
+  first_line_indent: false     # 段落首行缩进两字符
+
+headings:               # 每级标题独立配置，缺省的级别用默认值
+  h1:
+    font_en: "Arial"
+    font_zh: "黑体"
+    font_size: 22
+    bold: true
+    align: center       # left / center / right / justify
+    space_before: 24    # 段前间距（磅）
+    space_after: 18
+  h2:
+    font_en: "Arial"
+    font_zh: "黑体"
+    font_size: 18
+    bold: true
+    space_before: 18
+    space_after: 12
+  h3:
+    font_size: 16
+    bold: true
+  # h4 / h5 / h6 同理；还可配 italic、color（如 "C00000"）
+
+code:                   # 代码块与行内代码
+  font_en: "Consolas"
+  font_zh: "宋体"
+  font_size: 10.5
+  line_spacing: 1.15
+
+quote:                  # 引用块
+  italic: false
+  indent_cm: 0.75
+
+table:                  # 表格
+  style: grid           # grid（全边框网格）/ three_line（三线表：上下粗线+表头下细线）
+  header_align: center  # 表头对齐：left / center / right
+  header_bold: true     # 表头加粗
