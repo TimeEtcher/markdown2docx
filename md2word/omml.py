@@ -15,6 +15,20 @@ W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 # n-ary 运算符（上下限放正上/正下方，而不是右下角）
 NARY_OPS = set("∑∏∐∫∬∭∮⋂⋃⋀⋁")
 
+# 可视为重音符号的字符（\hat/\bar/\vec/\tilde 等）
+ACCENT_CHARS = {"^", "¯", "~", "→", "←", "˙", "¨", "ˇ", "˘", "˚"}
+
+# 围栏字符映射（mo -> 显示用字符）
+FENCE_DISPLAY = {
+    "(": "(", ")": ")",
+    "[": "[", "]": "]",
+    "{": "{", "}": "}",
+    "|": "|", "‖": "‖",
+    "⟨": "⟨", "⟩": "⟩",
+    "⌈": "⌈", "⌉": "⌉",
+    "⌊": "⌊", "⌋": "⌋",
+}
+
 
 class MathConversionError(Exception):
     pass
@@ -49,8 +63,65 @@ def wrap_omath_para(omath: etree._Element) -> etree._Element:
 
 # ------------------------------------------------------------ MathML -> OMML
 def _convert_children(node, parent, size):
-    for child in node:
-        _convert_node(child, parent, size)
+    children = list(node)
+    i = 0
+    while i < len(children):
+        child = children[i]
+        tag = _local(child)
+
+        # 左右定界符：mo fence=prefix ... mo fence=postfix -> m:d
+        if tag == "mo" and child.get("fence") == "true" and child.get("form") == "prefix":
+            j = _find_matching_fence(children, i)
+            if j is not None:
+                d = _m(parent, "d")
+                pr = _m(d, "dPr")
+                beg = _m(pr, "begChr")
+                beg.set(f"{{{M}}}val", _fence_display(child.text))
+                end = _m(pr, "endChr")
+                end.set(f"{{{M}}}val", _fence_display(children[j].text))
+                e = _m(d, "e")
+                for k in range(i + 1, j):
+                    _convert_node(children[k], e, size)
+                i = j + 1
+                continue
+
+        # n-ary 运算符：sum/integral 等，把后续同级子节点都作为被作用表达式放入 m:e
+        if tag in ("msub", "msup", "msubsup") and len(child) > 0 and _is_nary_base(child[0]):
+            _convert_node(child, parent, size)
+            # _convert_node 刚把 nary 追加到 parent 末尾
+            nary = parent[-1]
+            if _local(nary) == "nary":
+                e = nary.find(f"{{{M}}}e")
+                if e is not None:
+                    j = i + 1
+                    while j < len(children):
+                        _convert_node(children[j], e, size)
+                        j += 1
+                    i = j
+                    continue
+        else:
+            _convert_node(child, parent, size)
+        i += 1
+
+
+def _find_matching_fence(children, start):
+    depth = 1
+    for j in range(start + 1, len(children)):
+        c = children[j]
+        if _local(c) != "mo" or c.get("fence") != "true":
+            continue
+        form = c.get("form")
+        if form == "prefix":
+            depth += 1
+        elif form == "postfix":
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _fence_display(text):
+    return FENCE_DISPLAY.get(text, text)
 
 
 def _convert_node(node, parent, size):
@@ -63,7 +134,7 @@ def _convert_node(node, parent, size):
     # 其余未知标签直接忽略，保证不中断转换
 
 
-def _add_run(parent, text, size, node=None):
+def _add_run(parent, text, size, node=None, plain=False):
     r = _m(parent, "r")
     # 字号与正文保持一致
     if size:
@@ -71,8 +142,8 @@ def _add_run(parent, text, size, node=None):
         for t in ("sz", "szCs"):
             sz = etree.SubElement(rpr, f"{{{W}}}{t}")
             sz.set(f"{{{W}}}val", str(int(round(float(size) * 2))))
-    # \mathrm/\text 等正体字符
-    if node is not None and node.get("mathvariant") == "normal":
+    # 正体：数字、运算符、普通文本
+    if plain or (node is not None and node.get("mathvariant") == "normal"):
         mrpr = _m(r, "rPr")
         sty = _m(mrpr, "sty")
         sty.set(f"{{{M}}}val", "p")
@@ -83,11 +154,15 @@ def _add_run(parent, text, size, node=None):
 
 
 def _tok(node, parent, size):  # mi / mn / mo / mtext
-    _add_run(parent, node.text or "", size, node)
+    tag = _local(node)
+    text = node.text or ""
+    # mi 默认斜体；mn/mo/mtext 用正体
+    plain = tag in ("mn", "mo", "mtext")
+    _add_run(parent, text, size, node, plain=plain)
 
 
 def _mspace(node, parent, size):
-    _add_run(parent, " ", size)
+    _add_run(parent, " ", size, plain=True)
 
 
 def _mfrac(node, parent, size):
@@ -148,7 +223,7 @@ def _nary(base, under, over, parent, size):
     sup = _m(nary, "sup")
     if over is not None:
         _convert_node(over, sup, size)
-    _m(nary, "e")  # 积分等被作用表达式留空，由后续兄弟节点补充
+    _m(nary, "e")  # 被作用表达式由 _convert_children 中下一个节点补充
 
 
 def _munder(node, parent, size):
@@ -165,13 +240,14 @@ def _munder(node, parent, size):
 
 def _mover(node, parent, size):
     base, over = node[0], node[1]
-    # \hat/\bar/\vec 等重音符号：用 m:acc 让字符正上方加符号
-    if (node.get("accent") == "true" and _local(over) == "mo"
-            and len((over.text or "").strip()) == 1):
+    # \hat/\bar/\vec/\tilde 等重音符号：用 m:acc 让字符正上方加符号
+    over_text = (over.text or "").strip()
+    if _local(over) == "mo" and len(over_text) == 1 and (
+            node.get("accent") == "true" or over_text in ACCENT_CHARS):
         acc = _m(parent, "acc")
         pr = _m(acc, "accPr")
         chr_el = _m(pr, "chr")
-        chr_el.set(f"{{{M}}}val", (over.text or "").strip())
+        chr_el.set(f"{{{M}}}val", over_text)
         e = _m(acc, "e")
         _convert_node(base, e, size)
         return
