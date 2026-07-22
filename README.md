@@ -2,6 +2,8 @@
 
 可配置页面与字体样式的 Markdown → Word (.docx) 转换器，提供 GUI 和命令行两种用法，可打包为独立可执行文件。
 
+> **想直接体验？** 无需安装 Python，可直接下载仓库中的 [`dist/md2word.exe`](dist/md2word.exe) 双击运行（Windows 版）。
+
 ## 功能
 
 - **页面配置**：纸张大小（A4/A5/Letter/自定义）、上下左右页边距
