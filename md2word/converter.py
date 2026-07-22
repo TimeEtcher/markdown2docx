@@ -358,17 +358,21 @@ class Converter:
                  underline=False, color=None):
         if not text:
             return
-        # 参考文献区内的 [N] 只加书签，不转超链接
+        # 参考文献区内的 [N] 拆分为 [ + 数字书签 + ]，便于交叉引用精确指向数字
         if self.in_references:
             m = re.fullmatch(r"\[(\d+)\]", text)
             if m:
-                run = paragraph.add_run(text)
+                self._add_run(paragraph, "[", font_cfg, bold=bold, italic=italic,
+                              underline=underline, color=color)
+                run = paragraph.add_run(m.group(1))
                 style_run(run, font_cfg,
                           bold=True if bold else font_cfg.get("bold"),
                           italic=True if italic else font_cfg.get("italic"),
                           underline=True if underline else None,
                           color=color or font_cfg.get("color"))
                 self._wrap_run_with_bookmark(run, f"ref_{m.group(1)}", self._next_bookmark_id())
+                self._add_run(paragraph, "]", font_cfg, bold=bold, italic=italic,
+                              underline=underline, color=color)
                 return
             run = paragraph.add_run(text)
             style_run(run, font_cfg,
@@ -520,7 +524,7 @@ class Converter:
         return parts
 
     def _add_citation_links(self, paragraph, citation_text: str):
-        """把 [1]、[1-2]、[1,3] 等渲染为带中括号的上标，其中数字可点击跳转。"""
+        """把 [1]、[1-2]、[1,3] 等渲染为带中括号的上标，其中数字为交叉引用域。"""
         self._add_sup_run(paragraph, "[")
         inner = citation_text[1:-1]
         segments = [s.strip() for s in inner.split(",")]
@@ -531,30 +535,15 @@ class Converter:
             first = False
             if "-" in seg:
                 a, b = seg.split("-", 1)
-                self._add_cite_link(paragraph, a.strip())
+                self._add_cite_field(paragraph, a.strip())
                 self._add_sup_run(paragraph, "-")
-                self._add_cite_link(paragraph, b.strip())
+                self._add_cite_field(paragraph, b.strip())
             else:
-                self._add_cite_link(paragraph, seg)
+                self._add_cite_field(paragraph, seg)
         self._add_sup_run(paragraph, "]")
 
-    def _add_cite_link(self, paragraph, number_text: str):
-        """为单个引用编号创建指向参考文献书签的上标超链接。"""
-        try:
-            num = int(number_text)
-        except ValueError:
-            self._add_sup_run(paragraph, number_text)
-            return
-        if num not in self.ref_numbers:
-            self._add_sup_run(paragraph, number_text)
-            return
-
-        hyperlink = OxmlElement("w:hyperlink")
-        hyperlink.set(qn("w:anchor"), f"ref_{num}")
-
-        run = OxmlElement("w:r")
-        rPr = OxmlElement("w:rPr")
-
+    def _set_citation_rpr(self, rPr):
+        """设置引用标注 run 的公共格式（上标、字体、字号、颜色）。"""
         vert_align = OxmlElement("w:vertAlign")
         vert_align.set(qn("w:val"), "superscript")
         rPr.append(vert_align)
@@ -573,12 +562,44 @@ class Converter:
         color.set(qn("w:val"), "000000")
         rPr.append(color)
 
-        run.append(rPr)
-        t = OxmlElement("w:t")
-        t.text = number_text
-        run.append(t)
-        hyperlink.append(run)
-        paragraph._p.append(hyperlink)
+    def _add_cite_field(self, paragraph, number_text: str):
+        """为单个引用编号创建 Word REF 域交叉引用（带 \\h 开关，可点击跳转）。"""
+        try:
+            num = int(number_text)
+        except ValueError:
+            self._add_sup_run(paragraph, number_text)
+            return
+        if num not in self.ref_numbers:
+            self._add_sup_run(paragraph, number_text)
+            return
+
+        bookmark_name = f"ref_{num}"
+
+        def _field_run(fld_type=None, text=None, instr=None):
+            r = OxmlElement("w:r")
+            rPr = OxmlElement("w:rPr")
+            self._set_citation_rpr(rPr)
+            r.append(rPr)
+            if fld_type is not None:
+                fld = OxmlElement("w:fldChar")
+                fld.set(qn("w:fldCharType"), fld_type)
+                r.append(fld)
+            if instr is not None:
+                el = OxmlElement("w:instrText")
+                el.set(qn("xml:space"), "preserve")
+                el.text = instr
+                r.append(el)
+            if text is not None:
+                t = OxmlElement("w:t")
+                t.text = text
+                r.append(t)
+            paragraph._p.append(r)
+
+        _field_run(fld_type="begin")
+        _field_run(instr=f" REF {bookmark_name} \\h ")
+        _field_run(fld_type="separate")
+        _field_run(text=number_text)
+        _field_run(fld_type="end")
 
     def _add_sup_run(self, paragraph, text: str):
         """添加一个普通上标 run（用于连接符、逗号或未知编号）。"""
