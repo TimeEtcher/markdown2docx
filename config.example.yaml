@@ -26,18 +26,24 @@ headings:               # 每级标题独立配置，缺省的级别用默认值
     font_size: 22
     bold: true
     align: center       # left / center / right / justify
-    space_before: 24    # 段前间距（磅）
-    space_after: 18
+    # 段前/段后间距可用“空行”或“磅”两种方式，同时存在时优先空行
+    space_before_lines: 2.0   # 段前空行（以正文字号为基准）
+    space_after_lines: 1.5
+    # space_before: 24        # 段前间距（磅），未配置空行时生效
+    # space_after: 18
+    line_spacing: 1.5         # 标题行距（倍数）
   h2:
     font_en: "Arial"
     font_zh: "黑体"
     font_size: 18
     bold: true
-    space_before: 18
-    space_after: 12
+    space_before_lines: 1.5
+    space_after_lines: 1.0
   h3:
     font_size: 16
     bold: true
+    space_before_lines: 1.0
+    space_after_lines: 0.5
   # h4 / h5 / h6 同理；还可配 italic、color（如 "C00000"）
 
 code:                   # 代码块与行内代码

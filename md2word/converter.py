@@ -53,11 +53,22 @@ class Converter:
         # 用 Heading N 样式保留大纲级别（Word 导航窗格可用）；
         # run 级显式字体设置会覆盖样式自带的字体/颜色
         p = doc.add_paragraph(style=f"Heading {level}")
+
+        # 段前/段后间距支持“空行”单位（以正文字号为基准换算成磅）
+        base_font_size = float(self.body_cfg.get("font_size", 12))
+        space_before = cfg.get("space_before")
+        space_after = cfg.get("space_after")
+        if cfg.get("space_before_lines") is not None:
+            space_before = float(cfg["space_before_lines"]) * base_font_size
+        if cfg.get("space_after_lines") is not None:
+            space_after = float(cfg["space_after_lines"]) * base_font_size
+
         apply_paragraph_format(
             p,
             align=cfg.get("align"),
-            space_before=cfg.get("space_before"),
-            space_after=cfg.get("space_after"),
+            line_spacing=cfg.get("line_spacing"),
+            space_before=space_before,
+            space_after=space_after,
         )
         self.render_inlines(p, token.get("children", []), cfg)
 
