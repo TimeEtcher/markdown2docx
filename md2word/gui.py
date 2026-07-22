@@ -1,4 +1,4 @@
-"""Tkinter GUI：选择 Markdown/输出文件，在界面内直接编辑样式配置，并支持保存/加载配置。"""
+"""Tkinter GUI：选择 Markdown/输出文件，在界面内直接编辑样式配置，并支持保存/加载模版。"""
 
 from __future__ import annotations
 
@@ -77,8 +77,8 @@ class App:
         # 配置保存/加载按钮
         btn_frame = ttk.Frame(root)
         btn_frame.pack(fill=tk.X, padx=10, pady=2)
-        ttk.Button(btn_frame, text="保存配置", command=self._save_config).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(btn_frame, text="加载配置", command=self._load_config).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="保存模版", command=self._save_config).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_frame, text="加载模版", command=self._load_config).pack(side=tk.LEFT)
 
         self.convert_btn = ttk.Button(root, text="开始转换", command=self._convert)
         self.convert_btn.pack(pady=6)
@@ -350,7 +350,7 @@ class App:
             return
 
         path = filedialog.asksaveasfilename(
-            title="保存配置",
+            title="保存模版",
             initialfile="md2word_config.yaml",
             defaultextension=".yaml",
             filetypes=[("YAML 配置文件", "*.yaml *.yml"), ("所有文件", "*.*")],
@@ -362,11 +362,11 @@ class App:
                 yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
             self._log(f"配置已保存: {path}")
         except Exception as exc:
-            self._log(f"保存配置失败: {exc}")
+            self._log(f"保存模版失败: {exc}")
 
     def _load_config(self):
         path = filedialog.askopenfilename(
-            title="加载配置",
+            title="加载模版",
             defaultextension=".yaml",
             filetypes=[("YAML 配置文件", "*.yaml *.yml"), ("所有文件", "*.*")],
         )
@@ -378,7 +378,7 @@ class App:
             self._apply_config(cfg)
             self._log(f"配置已加载: {path}")
         except Exception as exc:
-            self._log(f"加载配置失败: {exc}")
+            self._log(f"加载模版失败: {exc}")
 
     # ------------------------------------------------------------------ 日志
 
