@@ -218,7 +218,7 @@ class App:
             self._label(frame, 0, col, text)
 
         vars_ = {}
-        for i, level in enumerate(("h1", "h2", "h3"), start=1):
+        for i, level in enumerate(("h1", "h2", "h3", "h4"), start=1):
             d = defaults[level]
             v = {
                 "font_zh": tk.StringVar(value=d["font_zh"]),
@@ -310,7 +310,7 @@ class App:
         self.table_vars["header_bold"].set(bool(table.get("header_bold", DEFAULT_CONFIG["table"]["header_bold"])))
 
         headings = cfg.get("headings", {})
-        for level in ("h1", "h2", "h3"):
+        for level in ("h1", "h2", "h3", "h4"):
             d = DEFAULT_CONFIG["headings"][level]
             h = headings.get(level, {})
             v = self.heading_vars[level]
@@ -421,7 +421,7 @@ class App:
         cfg["table"]["header_align"] = self.table_vars["header_align"].get()
         cfg["table"]["header_bold"] = bool(self.table_vars["header_bold"].get())
 
-        for level in ("h1", "h2", "h3"):
+        for level in ("h1", "h2", "h3", "h4"):
             v = self.heading_vars[level]
             size_name = v["font_size"].get()
             if size_name not in NAME_TO_PT:
