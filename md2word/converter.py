@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import os
+import re
 
 import mistune
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Cm
 
 from .styles import apply_page_setup, apply_paragraph_format, style_run
+
+
+# 引用标注：例如 [1]、[1-2]、[1,3]、[1-3,5]
+CITATION_RE = re.compile(r"\[\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*\]")
 
 
 class Converter:
@@ -20,6 +27,10 @@ class Converter:
         self.quote_cfg = config["quote"]
         self.md = mistune.create_markdown(renderer="ast", plugins=["math", "table"])
         self.base_dir = os.getcwd()  # 图片相对路径的基准目录，convert() 中更新
+        self.ref_numbers: set[int] = set()
+        self.in_references = False
+        self.ref_section_level = 0
+        self._bookmark_id = 0
 
     # ------------------------------------------------------------------ API
     def convert_file(self, md_path: str, output_path: str) -> str:
@@ -29,9 +40,16 @@ class Converter:
         return self.convert_text(text, output_path)
 
     def convert_text(self, md_text: str, output_path: str) -> str:
+        tokens = list(self.md(md_text))
+        tokens = self._merge_citation_tokens(tokens)
+        self._scan_references(tokens)
+        self.in_references = False
+        self.ref_section_level = 0
+        self._bookmark_id = 0
+
         doc = Document()
         apply_page_setup(doc, self.config["page"])
-        for token in self.md(md_text):
+        for token in tokens:
             self.render_block(doc, token, depth=0, in_quote=False)
         doc.save(output_path)
         return output_path
@@ -53,6 +71,13 @@ class Converter:
         # 用 Heading N 样式保留大纲级别（Word 导航窗格可用）；
         # run 级显式字体设置会覆盖样式自带的字体/颜色
         p = doc.add_paragraph(style=f"Heading {level}")
+
+        heading_text = self._inline_text(token).strip()
+        if heading_text in ("参考文献", "References"):
+            self.in_references = True
+            self.ref_section_level = level
+        elif self.in_references and level <= self.ref_section_level:
+            self.in_references = False
 
         # 段前/段后间距支持“空行”单位（以正文字号为基准换算成磅）
         base_font_size = float(self.body_cfg.get("font_size", 12))
@@ -333,12 +358,43 @@ class Converter:
                  underline=False, color=None):
         if not text:
             return
-        run = paragraph.add_run(text)
-        style_run(run, font_cfg,
-                  bold=True if bold else font_cfg.get("bold"),
-                  italic=True if italic else font_cfg.get("italic"),
-                  underline=True if underline else None,
-                  color=color or font_cfg.get("color"))
+        # 参考文献区内的 [N] 只加书签，不转超链接
+        if self.in_references:
+            m = re.fullmatch(r"\[(\d+)\]", text)
+            if m:
+                run = paragraph.add_run(text)
+                style_run(run, font_cfg,
+                          bold=True if bold else font_cfg.get("bold"),
+                          italic=True if italic else font_cfg.get("italic"),
+                          underline=True if underline else None,
+                          color=color or font_cfg.get("color"))
+                self._wrap_run_with_bookmark(run, f"ref_{m.group(1)}", self._next_bookmark_id())
+                return
+            run = paragraph.add_run(text)
+            style_run(run, font_cfg,
+                      bold=True if bold else font_cfg.get("bold"),
+                      italic=True if italic else font_cfg.get("italic"),
+                      underline=True if underline else None,
+                      color=color or font_cfg.get("color"))
+            return
+        if not self.ref_numbers or not CITATION_RE.search(text):
+            run = paragraph.add_run(text)
+            style_run(run, font_cfg,
+                      bold=True if bold else font_cfg.get("bold"),
+                      italic=True if italic else font_cfg.get("italic"),
+                      underline=True if underline else None,
+                      color=color or font_cfg.get("color"))
+            return
+        for kind, content in self._split_citation(text):
+            if kind == "text":
+                run = paragraph.add_run(content)
+                style_run(run, font_cfg,
+                          bold=True if bold else font_cfg.get("bold"),
+                          italic=True if italic else font_cfg.get("italic"),
+                          underline=True if underline else None,
+                          color=color or font_cfg.get("color"))
+            else:
+                self._add_citation_links(paragraph, content)
 
     def _add_math(self, paragraph, latex: str):
         """行内公式 $...$：转为 OMML 挂到当前段落；失败时按原文输出红色文本。"""
@@ -366,3 +422,215 @@ class Converter:
         except Exception:
             self._add_run(paragraph, f"[图片无法读取: {url}]", self.body_cfg,
                           color="C00000")
+
+    # -------------------------------------------------------------- references / citations
+
+    @staticmethod
+    def _inline_text(token) -> str:
+        """递归提取 token 中的纯文本。"""
+        if not isinstance(token, dict):
+            return ""
+        if token.get("type") == "text":
+            return token.get("raw", "")
+        return "".join(Converter._inline_text(child) for child in token.get("children", []) or [])
+
+    def _scan_references(self, tokens):
+        """扫描 AST，收集参考文献区中所有引用编号（含 [N] 与 [M-N] 范围）。"""
+        in_refs = False
+        ref_section_level = 0
+        for token in tokens:
+            ttype = token.get("type")
+            if ttype == "heading":
+                text = self._inline_text(token).strip()
+                level = int(token.get("attrs", {}).get("level", 1))
+                if text in ("参考文献", "References"):
+                    in_refs = True
+                    ref_section_level = level
+                    continue
+                if in_refs and level <= ref_section_level:
+                    in_refs = False
+                    continue
+            if not in_refs:
+                continue
+            if ttype == "list":
+                for item in token.get("children", []) or []:
+                    self._collect_ref_numbers(item)
+            elif ttype in ("paragraph", "block_text"):
+                self._collect_ref_numbers(token)
+
+    def _collect_ref_numbers(self, token):
+        """从 token 文本中收集 [N] 与 [M-N] 里的所有编号。"""
+        text = self._inline_text(token)
+        for m in CITATION_RE.finditer(text):
+            inner = m.group()[1:-1]
+            for seg in inner.split(","):
+                seg = seg.strip()
+                if "-" in seg:
+                    a, b = seg.split("-", 1)
+                    try:
+                        for num in range(int(a), int(b) + 1):
+                            self.ref_numbers.add(num)
+                    except ValueError:
+                        pass
+                else:
+                    try:
+                        self.ref_numbers.add(int(seg))
+                    except ValueError:
+                        pass
+
+    def _next_bookmark_id(self) -> int:
+        self._bookmark_id += 1
+        return self._bookmark_id
+
+    def _add_bookmark(self, paragraph, bookmark_name: str, bookmark_id: int):
+        """给段落整体添加书签（用于参考文献条目定位）。"""
+        start = OxmlElement("w:bookmarkStart")
+        start.set(qn("w:id"), str(bookmark_id))
+        start.set(qn("w:name"), bookmark_name)
+        paragraph._p.insert(0, start)
+        end = OxmlElement("w:bookmarkEnd")
+        end.set(qn("w:id"), str(bookmark_id))
+        paragraph._p.append(end)
+
+    def _wrap_run_with_bookmark(self, run, bookmark_name: str, bookmark_id: int):
+        """给一个 run 首尾包裹书签。"""
+        start = OxmlElement("w:bookmarkStart")
+        start.set(qn("w:id"), str(bookmark_id))
+        start.set(qn("w:name"), bookmark_name)
+        end = OxmlElement("w:bookmarkEnd")
+        end.set(qn("w:id"), str(bookmark_id))
+        run._r.insert(0, start)
+        run._r.append(end)
+
+    def _split_citation(self, text: str):
+        """把文本拆分为普通文本与引用标注交替的列表。"""
+        parts = []
+        last = 0
+        for m in CITATION_RE.finditer(text):
+            if m.start() > last:
+                parts.append(("text", text[last:m.start()]))
+            parts.append(("cite", m.group()))
+            last = m.end()
+        if last < len(text):
+            parts.append(("text", text[last:]))
+        if not parts:
+            parts.append(("text", text))
+        return parts
+
+    def _add_citation_links(self, paragraph, citation_text: str):
+        """把 [1]、[1-2]、[1,3] 等拆成可点击的上标链接。"""
+        inner = citation_text[1:-1]
+        segments = [s.strip() for s in inner.split(",")]
+        first = True
+        for seg in segments:
+            if not first:
+                self._add_sup_run(paragraph, ",")
+            first = False
+            if "-" in seg:
+                a, b = seg.split("-", 1)
+                self._add_cite_link(paragraph, a.strip())
+                self._add_sup_run(paragraph, "-")
+                self._add_cite_link(paragraph, b.strip())
+            else:
+                self._add_cite_link(paragraph, seg)
+
+    def _add_cite_link(self, paragraph, number_text: str):
+        """为单个引用编号创建指向参考文献书签的上标超链接。"""
+        try:
+            num = int(number_text)
+        except ValueError:
+            self._add_sup_run(paragraph, number_text)
+            return
+        if num not in self.ref_numbers:
+            self._add_sup_run(paragraph, number_text)
+            return
+
+        hyperlink = OxmlElement("w:hyperlink")
+        hyperlink.set(qn("w:anchor"), f"ref_{num}")
+
+        run = OxmlElement("w:r")
+        rPr = OxmlElement("w:rPr")
+
+        vert_align = OxmlElement("w:vertAlign")
+        vert_align.set(qn("w:val"), "superscript")
+        rPr.append(vert_align)
+
+        rfonts = OxmlElement("w:rFonts")
+        rfonts.set(qn("w:ascii"), self.body_cfg.get("font_en", ""))
+        rfonts.set(qn("w:hAnsi"), self.body_cfg.get("font_en", ""))
+        rfonts.set(qn("w:eastAsia"), self.body_cfg.get("font_zh", ""))
+        rPr.append(rfonts)
+
+        sz = OxmlElement("w:sz")
+        sz.set(qn("w:val"), str(int(self.body_cfg.get("font_size", 12) * 2)))
+        rPr.append(sz)
+
+        color = OxmlElement("w:color")
+        color.set(qn("w:val"), "000000")
+        rPr.append(color)
+
+        run.append(rPr)
+        t = OxmlElement("w:t")
+        t.text = number_text
+        run.append(t)
+        hyperlink.append(run)
+        paragraph._p.append(hyperlink)
+
+    def _add_sup_run(self, paragraph, text: str):
+        """添加一个普通上标 run（用于连接符、逗号或未知编号）。"""
+        run = paragraph.add_run(text)
+        style_run(run, self.body_cfg)
+        run.font.superscript = True
+
+    def _merge_citation_tokens(self, tokens):
+        """递归合并被 Mistune 拆开的引用标注文本 token（例如 [ 和 1]）。"""
+        for token in tokens:
+            if not isinstance(token, dict):
+                continue
+            children = token.get("children")
+            if children:
+                token["children"] = self._merge_citation_tokens(children)
+                # 仅对 inline 容器执行引用合并
+                if token.get("type") in ("text", "strong", "emphasis", "link", "paragraph",
+                                          "block_text", "heading", "list_item", "table_cell"):
+                    token["children"] = self._merge_inline_citations(token["children"])
+        return tokens
+
+    @staticmethod
+    def _merge_inline_citations(children):
+        """把连续文本 token 中的 [1]、[1-2]、[1,4] 合并成单个文本 token。"""
+        if not children:
+            return children
+        result = []
+        i = 0
+        n = len(children)
+        while i < n:
+            child = children[i]
+            if child.get("type") == "text" and child.get("raw") == "[":
+                j = i + 1
+                acc = []
+                citation_body = None
+                suffix = ""
+                while j < n:
+                    nxt = children[j]
+                    if nxt.get("type") == "text":
+                        raw = nxt.get("raw", "")
+                        acc.append(raw)
+                        combined = "".join(acc)
+                        m = re.match(r"^(\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*)\](.*)", combined)
+                        if m:
+                            citation_body = m.group(1)
+                            suffix = m.group(2)
+                            break
+                        j += 1
+                    else:
+                        break
+                if citation_body is not None:
+                    result.append({"type": "text", "raw": f"[{citation_body}]"})
+                    if suffix:
+                        result.append({"type": "text", "raw": suffix})
+                    i = j + 1
+                    continue
+            result.append(child)
+            i += 1
+        return result
