@@ -200,6 +200,8 @@ class App:
             "line_spacing": tk.StringVar(value=str(defaults["line_spacing"])),
             "first_line_indent": tk.BooleanVar(value=defaults["first_line_indent"]),
             "color": tk.StringVar(value=defaults["color"]),
+            "space_before_lines": tk.StringVar(value=str(defaults.get("space_before_lines", 0))),
+            "space_after_lines": tk.StringVar(value=str(defaults.get("space_after_lines", 0))),
         }
         self._font_combo(frame, 0, "英文字体", vars_["font_en"])
         self._font_combo(frame, 1, "中文字体", vars_["font_zh"])
@@ -207,6 +209,8 @@ class App:
         self._numeric_entry(frame, 3, "行距", vars_["line_spacing"], unit="倍")
         self._numeric_entry(frame, 4, "颜色 (RRGGBB)", vars_["color"], width=16)
         self._check(frame, 5, "段落首行缩进两字符", vars_["first_line_indent"])
+        self._numeric_entry(frame, 6, "段前空行", vars_["space_before_lines"], unit="行")
+        self._numeric_entry(frame, 7, "段后空行", vars_["space_after_lines"], unit="行")
         return vars_
 
     def _build_headings_tab(self, notebook):
@@ -239,6 +243,15 @@ class App:
             ttk.Entry(frame, textvariable=v["space_before_lines"], width=6).grid(row=i, column=5, padx=3, pady=2)
             ttk.Entry(frame, textvariable=v["space_after_lines"], width=6).grid(row=i, column=6, padx=3, pady=2)
             ttk.Entry(frame, textvariable=v["line_spacing"], width=6).grid(row=i, column=7, padx=3, pady=2)
+
+        # 编号与标题之间的间隔（应用于所有标题级别）
+        self._number_sep_map = {"空格": " ", "制表符": "\t", "两个空格": "  ", "四个空格": "    "}
+        self._number_sep_reverse = {v: k for k, v in self._number_sep_map.items()}
+        self.heading_number_sep_var = tk.StringVar(value="空格")
+        row = len(vars_) + 1
+        ttk.Label(frame, text="编号与标题间隔:").grid(row=row, column=0, sticky=tk.W, pady=8)
+        ttk.Combobox(frame, textvariable=self.heading_number_sep_var,
+                     values=list(self._number_sep_map.keys()), width=12, state="readonly").grid(row=row, column=1, sticky=tk.W)
         return vars_
 
     def _build_code_table_tab(self, notebook):
@@ -296,6 +309,8 @@ class App:
         self.body_vars["line_spacing"].set(str(body.get("line_spacing", DEFAULT_CONFIG["body"]["line_spacing"])))
         self.body_vars["first_line_indent"].set(bool(body.get("first_line_indent", DEFAULT_CONFIG["body"]["first_line_indent"])))
         self.body_vars["color"].set(body.get("color", DEFAULT_CONFIG["body"]["color"]))
+        self.body_vars["space_before_lines"].set(str(body.get("space_before_lines", DEFAULT_CONFIG["body"].get("space_before_lines", 0))))
+        self.body_vars["space_after_lines"].set(str(body.get("space_after_lines", DEFAULT_CONFIG["body"].get("space_after_lines", 0))))
 
         code = cfg.get("code", {})
         self.code_vars["font_en"].set(code.get("font_en", DEFAULT_CONFIG["code"]["font_en"]))
@@ -321,6 +336,11 @@ class App:
             v["space_before_lines"].set(str(h.get("space_before_lines", d.get("space_before_lines", 0))))
             v["space_after_lines"].set(str(h.get("space_after_lines", d.get("space_after_lines", 0))))
             v["line_spacing"].set(str(h.get("line_spacing", d.get("line_spacing", 1.5))))
+
+        h1 = headings.get("h1", {})
+        default_sep = DEFAULT_CONFIG["headings"]["h1"].get("number_sep", " ")
+        sep = h1.get("number_sep", default_sep)
+        self.heading_number_sep_var.set(self._number_sep_reverse.get(sep, "空格"))
 
     def _save_config(self):
         try:
@@ -407,6 +427,8 @@ class App:
         cfg["body"]["line_spacing"] = self._get_numeric(self.body_vars["line_spacing"], "正文行距")
         cfg["body"]["first_line_indent"] = bool(self.body_vars["first_line_indent"].get())
         cfg["body"]["color"] = self.body_vars["color"].get().strip() or DEFAULT_CONFIG["body"]["color"]
+        cfg["body"]["space_before_lines"] = self._get_numeric(self.body_vars["space_before_lines"], "正文段前空行")
+        cfg["body"]["space_after_lines"] = self._get_numeric(self.body_vars["space_after_lines"], "正文段后空行")
 
         code_font_size_name = self.code_vars["font_size"].get()
         if code_font_size_name not in NAME_TO_PT:
@@ -421,6 +443,7 @@ class App:
         cfg["table"]["header_align"] = self.table_vars["header_align"].get()
         cfg["table"]["header_bold"] = bool(self.table_vars["header_bold"].get())
 
+        number_sep = self._number_sep_map.get(self.heading_number_sep_var.get(), " ")
         for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
             v = self.heading_vars[level]
             size_name = v["font_size"].get()
@@ -434,6 +457,7 @@ class App:
                 "space_before_lines": self._get_numeric(v["space_before_lines"], f"{level.upper()} 段前空行"),
                 "space_after_lines": self._get_numeric(v["space_after_lines"], f"{level.upper()} 段后空行"),
                 "line_spacing": self._get_numeric(v["line_spacing"], f"{level.upper()} 行距"),
+                "number_sep": number_sep,
             }
 
         return deep_merge(DEFAULT_CONFIG, cfg)

@@ -23,6 +23,8 @@ DEFAULT_CONFIG: dict = {
         "line_spacing": 1.5,      # 倍数行距
         "first_line_indent": False,  # 正文段落首行缩进两字符
         "color": "000000",        # 默认黑色
+        "space_before_lines": 0.0,  # 段前空行（以正文字号为基准）
+        "space_after_lines": 0.0,   # 段后空行
     },
     # h1~h6：每级标题可配置 font_en/font_zh/font_size/bold/italic/color/align/
     # space_before/space_after；缺省级别按下面的默认值递减
@@ -30,27 +32,27 @@ DEFAULT_CONFIG: dict = {
         "h1": {"font_en": "Arial", "font_zh": "黑体", "font_size": 22, "bold": True,
                "color": "000000", "align": "center",
                "space_before_lines": 2.0, "space_after_lines": 1.5, "line_spacing": 1.5,
-               "space_before": 24, "space_after": 18},
+               "space_before": 24, "space_after": 18, "number_sep": " "},
         "h2": {"font_en": "Arial", "font_zh": "黑体", "font_size": 18, "bold": True,
                "color": "000000",
                "space_before_lines": 1.5, "space_after_lines": 1.0, "line_spacing": 1.5,
-               "space_before": 18, "space_after": 12},
+               "space_before": 18, "space_after": 12, "number_sep": " "},
         "h3": {"font_en": "Arial", "font_zh": "黑体", "font_size": 16, "bold": True,
                "color": "000000",
                "space_before_lines": 1.0, "space_after_lines": 0.5, "line_spacing": 1.5,
-               "space_before": 13, "space_after": 6},
+               "space_before": 13, "space_after": 6, "number_sep": " "},
         "h4": {"font_en": "Arial", "font_zh": "黑体", "font_size": 14, "bold": True,
                "color": "000000",
                "space_before_lines": 0.5, "space_after_lines": 0.5, "line_spacing": 1.5,
-               "space_before": 12, "space_after": 6},
+               "space_before": 12, "space_after": 6, "number_sep": " "},
         "h5": {"font_en": "Arial", "font_zh": "黑体", "font_size": 12, "bold": True,
                "color": "000000",
                "space_before_lines": 0.5, "space_after_lines": 0.5, "line_spacing": 1.5,
-               "space_before": 12, "space_after": 6},
+               "space_before": 12, "space_after": 6, "number_sep": " "},
         "h6": {"font_en": "Arial", "font_zh": "黑体", "font_size": 11, "bold": True,
                "color": "000000",
                "space_before_lines": 0.5, "space_after_lines": 0.5, "line_spacing": 1.5,
-               "space_before": 6, "space_after": 6},
+               "space_before": 6, "space_after": 6, "number_sep": " "},
     },
     "code": {
         "font_en": "Consolas",

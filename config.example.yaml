@@ -18,6 +18,8 @@ body:                   # 正文样式
   font_size: 12                # 字号（磅）
   line_spacing: 1.5            # 行距（倍数）
   first_line_indent: false     # 段落首行缩进两字符
+  space_before_lines: 0.0      # 段前空行（以正文字号为基准）
+  space_after_lines: 0.0       # 段后空行
 
 headings:               # 每级标题独立配置，缺省的级别用默认值
   h1:
@@ -32,6 +34,7 @@ headings:               # 每级标题独立配置，缺省的级别用默认值
     # space_before: 24        # 段前间距（磅），未配置空行时生效
     # space_after: 18
     line_spacing: 1.5         # 标题行距（倍数）
+    number_sep: " "           # 编号与标题之间的间隔，可改为 "\t" 制表符
   h2:
     font_en: "Arial"
     font_zh: "黑体"

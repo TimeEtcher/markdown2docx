@@ -95,14 +95,26 @@ class Converter:
             space_before=space_before,
             space_after=space_after,
         )
+        self._apply_heading_number_sep(token, cfg)
         self.render_inlines(p, token.get("children", []), cfg)
 
     def block_paragraph(self, doc, token, depth, in_quote):
         p = doc.add_paragraph()
         cfg = self.body_cfg
+        # 正文段前/段后间距支持“空行”单位（以正文字号为基准换算成磅）
+        font_size = float(cfg.get("font_size", 12))
+        space_before = cfg.get("space_before")
+        space_after = cfg.get("space_after")
+        if cfg.get("space_before_lines") is not None:
+            space_before = float(cfg["space_before_lines"]) * font_size
+        if cfg.get("space_after_lines") is not None:
+            space_after = float(cfg["space_after_lines"]) * font_size
+
         apply_paragraph_format(
             p,
             line_spacing=cfg.get("line_spacing"),
+            space_before=space_before,
+            space_after=space_after,
             first_line_indent_chars=2 if (cfg.get("first_line_indent") and not in_quote) else 0,
             font_size=cfg.get("font_size"),
             left_indent_cm=self.quote_cfg.get("indent_cm") if in_quote else None,
@@ -659,3 +671,20 @@ class Converter:
             result.append(child)
             i += 1
         return result
+
+    @staticmethod
+    def _apply_heading_number_sep(token, cfg):
+        """把标题开头“数字 + 空格”中的空格替换为配置的间隔符。"""
+        sep = cfg.get("number_sep")
+        if sep is None or sep == " ":
+            return
+        children = token.get("children", []) or []
+        if not children:
+            return
+        first = children[0]
+        if first.get("type") != "text":
+            return
+        raw = first.get("raw", "")
+        m = re.match(r"^(\d+(?:\.\d+)*)\s+(.*)$", raw)
+        if m:
+            first["raw"] = m.group(1) + sep + m.group(2)
