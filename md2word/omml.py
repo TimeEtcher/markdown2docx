@@ -156,8 +156,8 @@ def _add_run(parent, text, size, node=None, plain=False):
 def _tok(node, parent, size):  # mi / mn / mo / mtext
     tag = _local(node)
     text = node.text or ""
-    # mi 默认斜体；mn/mo/mtext 用正体
-    plain = tag in ("mn", "mo", "mtext")
+    # mi 默认斜体；mn/mo/mtext 用正体（逗号除外，避免下标中出现异常占位框）
+    plain = tag in ("mn", "mtext") or (tag == "mo" and text != ",")
     _add_run(parent, text, size, node, plain=plain)
 
 
@@ -217,11 +217,12 @@ def _nary(base, under, over, parent, size):
     pr = _m(nary, "naryPr")
     chr_el = _m(pr, "chr")
     chr_el.set(f"{{{M}}}val", (base.text or "").strip())
-    sub = _m(nary, "sub")
+    # 空上/下限不生成占位元素，避免 Word 显示虚线框
     if under is not None:
+        sub = _m(nary, "sub")
         _convert_node(under, sub, size)
-    sup = _m(nary, "sup")
     if over is not None:
+        sup = _m(nary, "sup")
         _convert_node(over, sup, size)
     _m(nary, "e")  # 被作用表达式由 _convert_children 中下一个节点补充
 
