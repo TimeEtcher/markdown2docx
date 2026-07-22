@@ -493,14 +493,16 @@ class Converter:
         paragraph._p.append(end)
 
     def _wrap_run_with_bookmark(self, run, bookmark_name: str, bookmark_id: int):
-        """给一个 run 首尾包裹书签。"""
+        """在段落层级给一个 run 首尾包裹书签（书签标记必须是 w:p 的直接子元素）。"""
+        p = run._r.getparent()
+        idx = list(p).index(run._r)
         start = OxmlElement("w:bookmarkStart")
         start.set(qn("w:id"), str(bookmark_id))
         start.set(qn("w:name"), bookmark_name)
         end = OxmlElement("w:bookmarkEnd")
         end.set(qn("w:id"), str(bookmark_id))
-        run._r.insert(0, start)
-        run._r.append(end)
+        p.insert(idx, start)
+        p.insert(idx + 2, end)
 
     def _split_citation(self, text: str):
         """把文本拆分为普通文本与引用标注交替的列表。"""
@@ -518,7 +520,8 @@ class Converter:
         return parts
 
     def _add_citation_links(self, paragraph, citation_text: str):
-        """把 [1]、[1-2]、[1,3] 等拆成可点击的上标链接。"""
+        """把 [1]、[1-2]、[1,3] 等渲染为带中括号的上标，其中数字可点击跳转。"""
+        self._add_sup_run(paragraph, "[")
         inner = citation_text[1:-1]
         segments = [s.strip() for s in inner.split(",")]
         first = True
@@ -533,6 +536,7 @@ class Converter:
                 self._add_cite_link(paragraph, b.strip())
             else:
                 self._add_cite_link(paragraph, seg)
+        self._add_sup_run(paragraph, "]")
 
     def _add_cite_link(self, paragraph, number_text: str):
         """为单个引用编号创建指向参考文献书签的上标超链接。"""
