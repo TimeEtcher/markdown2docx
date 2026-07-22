@@ -1,12 +1,99 @@
 page:
   size: A4
-  margin_top_cm: 2.0
-  margin_bottom_cm: 2.0
-  margin_left_cm: 2.0
-  margin_right_cm: 2.0
-
+  width_cm: 21.0
+  height_cm: 29.7
+  margin_top_cm: 2
+  margin_bottom_cm: 2
+  margin_left_cm: 2
+  margin_right_cm: 2
 body:
-  font_en: "Times New Roman"
-  font_zh: "宋体"
-  font_size: 12        # 小四号
+  font_en: Times New Roman
+  font_zh: 宋体
+  font_size: 12
   line_spacing: 1.5
+  first_line_indent: true
+  color: '000000'
+headings:
+  h1:
+    font_en: Arial
+    font_zh: 黑体
+    font_size: 22
+    bold: true
+    color: '000000'
+    align: left
+    space_before_lines: 1.5
+    space_after_lines: 1
+    line_spacing: 1.5
+    space_before: 24
+    space_after: 18
+  h2:
+    font_en: Arial
+    font_zh: 黑体
+    font_size: 14
+    bold: true
+    color: '000000'
+    space_before_lines: 0.5
+    space_after_lines: 0.5
+    line_spacing: 1.5
+    space_before: 18
+    space_after: 12
+    align: left
+  h3:
+    font_en: Arial
+    font_zh: 黑体
+    font_size: 12
+    bold: true
+    color: '000000'
+    space_before_lines: 0.5
+    space_after_lines: 0.5
+    line_spacing: 1.5
+    space_before: 13
+    space_after: 6
+    align: left
+  h4:
+    font_en: Arial
+    font_zh: 宋体
+    font_size: 12
+    bold: true
+    color: '000000'
+    space_before_lines: 0.5
+    space_after_lines: 0.5
+    line_spacing: 1.5
+    space_before: 12
+    space_after: 6
+    align: left
+  h5:
+    font_en: Arial
+    font_zh: 黑体
+    font_size: 12
+    bold: true
+    color: '000000'
+    space_before_lines: 0.5
+    space_after_lines: 0.5
+    line_spacing: 1.5
+    space_before: 12
+    space_after: 6
+  h6:
+    font_en: Arial
+    font_zh: 黑体
+    font_size: 11
+    bold: true
+    color: '000000'
+    space_before_lines: 0.5
+    space_after_lines: 0.5
+    line_spacing: 1.5
+    space_before: 6
+    space_after: 6
+code:
+  font_en: Times New Roman
+  font_zh: 宋体
+  font_size: 10.5
+  line_spacing: 1.15
+  color: '000000'
+quote:
+  italic: false
+  indent_cm: 0.75
+table:
+  style: three_line
+  header_align: right
+  header_bold: true
